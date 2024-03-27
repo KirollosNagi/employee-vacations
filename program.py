@@ -6,7 +6,7 @@ class EmployeeVacationApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Employee Vacation Tracker")
-        self.master.geometry("400x500")
+        self.master.geometry("400x300")
 
         # Initialize database
         self.conn = sqlite3.connect("employee_vacations.db")
@@ -43,6 +43,10 @@ class EmployeeVacationApp:
         self.listbox_employees = tk.Listbox(self.master)
         self.listbox_employees.pack()
 
+        # Button to remove employee
+        self.button_remove_employee = tk.Button(self.master, text="Remove Employee", command=self.remove_employee)
+        self.button_remove_employee.pack()
+
         # Label and Entry for Vacation Date
         self.label_vacation_date = tk.Label(self.master, text="Vacation Date (YYYY-MM-DD):")
         self.label_vacation_date.pack()
@@ -59,7 +63,6 @@ class EmployeeVacationApp:
 
         # Populate employees listbox
         self.populate_employees_listbox()
-        self.populate_vacation_records_listbox()
 
     def add_employee(self):
         employee_name = self.entry_employee_name.get()
@@ -70,6 +73,18 @@ class EmployeeVacationApp:
             self.entry_employee_name.delete(0, tk.END)
         else:
             messagebox.showerror("Error", "Please enter employee name.")
+
+    def remove_employee(self):
+        selected_employee = self.listbox_employees.curselection()
+        if selected_employee:
+            selected_employee_id = self.listbox_employees.get(selected_employee)[0]
+            self.cur.execute("DELETE FROM employees WHERE id=?", (selected_employee_id,))
+            self.cur.execute("DELETE FROM vacations WHERE employee_id=?", (selected_employee_id,))
+            self.conn.commit()
+            self.populate_employees_listbox()
+            self.populate_vacation_records_listbox()
+        else:
+            messagebox.showerror("Error", "Please select an employee.")
 
     def record_vacation(self):
         selected_employee = self.listbox_employees.curselection()
