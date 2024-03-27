@@ -2,6 +2,8 @@ import tkinter as tk
 import sqlite3
 import csv
 from tkinter import messagebox
+from tkinter import filedialog
+from datetime import datetime
 
 class EmployeeVacationApp:
     def __init__(self, master):
@@ -63,6 +65,10 @@ class EmployeeVacationApp:
         self.button_remove_vacation = tk.Button(self.master, text="Remove Vacation", command=self.remove_vacation)
         self.button_remove_vacation.pack()
 
+        # Button to import vacations from CSV
+        self.button_import_vacations = tk.Button(self.master, text="Import Vacations from CSV", command=self.import_vacations_from_csv)
+        self.button_import_vacations.pack()
+
         # Listbox to display vacation records
         self.listbox_vacation_records = tk.Listbox(self.master)
         self.listbox_vacation_records.pack()
@@ -74,6 +80,8 @@ class EmployeeVacationApp:
         self.button_export_vacations = tk.Button(self.master, text="Export Vacations", command=self.export_vacations)
         self.button_export_vacations.pack()
 
+        self.listbox_employees.bind("<<ListboxSelect>>", self.populate_vacation_records_listbox)
+        
         # Populate employees listbox
         self.populate_employees_listbox()
         self.populate_vacation_records_listbox()
@@ -84,6 +92,7 @@ class EmployeeVacationApp:
             self.cur.execute("INSERT INTO employees (name) VALUES (?)", (employee_name,))
             self.conn.commit()
             self.populate_employees_listbox()
+            self.populate_vacation_records_listbox()
             self.entry_employee_name.delete(0, tk.END)
         else:
             messagebox.showerror("Error", "Please enter employee name.")
@@ -142,12 +151,63 @@ class EmployeeVacationApp:
         for employee in employees:
             self.listbox_employees.insert(tk.END, employee)
 
-    def populate_vacation_records_listbox(self):
+    def populate_vacation_records_listbox(self, event=None):
         self.listbox_vacation_records.delete(0, tk.END)
-        self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
+        selected_index = self.listbox_employees.curselection()
+        if selected_index:
+            selected_employee_id = self.listbox_employees.get(selected_index)[0]
+            self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id WHERE e.id=?", (selected_employee_id,))
+        else:
+            self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
         vacation_records = self.cur.fetchall()
         for record in vacation_records:
             self.listbox_vacation_records.insert(tk.END, f"{record[0]} - {record[1]}")
+
+
+    def import_vacations_from_csv(self):
+        filename = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        if filename:
+            with open(filename, "r") as file:
+                csv_reader = csv.reader(file)
+                for row in csv_reader:
+                    if len(row) == 2:
+                        employee_name, vacation_date = row
+                        try:
+                            # Parsing date to ensure consistent format
+                            vacation_date = self.parse_date(vacation_date)
+                            employee_id = self.get_or_add_employee_id(employee_name)
+                            if not self.check_duplicate_vacation(employee_id, vacation_date):
+                                self.cur.execute("INSERT INTO vacations (employee_id, date) VALUES (?, ?)", (employee_id, vacation_date))
+                                self.conn.commit()
+                        except ValueError:
+                            messagebox.showerror("Error", f"Invalid date format: {vacation_date}")
+            self.populate_employees_listbox()
+            self.populate_vacation_records_listbox()
+            messagebox.showinfo("Import Successful", "Vacations imported successfully.")
+        else:
+            messagebox.showerror("Error", "No file selected.")
+
+
+    def parse_date(self, date_str):
+        formats_to_try = ["%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%d/%m/%Y"]  # Add more formats if needed
+        for date_format in formats_to_try:
+            try:
+                parsed_date = datetime.strptime(date_str, date_format).date()
+                return parsed_date.strftime("%Y-%m-%d")  # Standardize to YYYY-MM-DD format
+            except ValueError:
+                continue
+        raise ValueError(f"Date string: '{date_str}' does not match any known format")
+
+    def get_or_add_employee_id(self, employee_name):
+        employee_name = employee_name.strip()
+        self.cur.execute("SELECT id FROM employees WHERE name=?", (employee_name,))
+        result = self.cur.fetchone()
+        if result:
+            return result[0]
+        else:
+            self.cur.execute("INSERT INTO employees (name) VALUES (?)", (employee_name,))
+            self.conn.commit()
+            return self.cur.lastrowid
 
     def export_employees(self):
         with open("employees.csv", "w", newline="") as file:
