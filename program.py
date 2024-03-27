@@ -1,12 +1,13 @@
 import tkinter as tk
 import sqlite3
+import csv
 from tkinter import messagebox
 
 class EmployeeVacationApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Employee Vacation Tracker")
-        self.master.geometry("400x300")
+        self.master.geometry("400x600")
 
         # Initialize database
         self.conn = sqlite3.connect("employee_vacations.db")
@@ -61,8 +62,16 @@ class EmployeeVacationApp:
         self.listbox_vacation_records = tk.Listbox(self.master)
         self.listbox_vacation_records.pack()
 
+        # Button to export employees and vacations
+        self.button_export_employees = tk.Button(self.master, text="Export Employees", command=self.export_employees)
+        self.button_export_employees.pack()
+
+        self.button_export_vacations = tk.Button(self.master, text="Export Vacations", command=self.export_vacations)
+        self.button_export_vacations.pack()
+
         # Populate employees listbox
         self.populate_employees_listbox()
+        self.populate_vacation_records_listbox()
 
     def add_employee(self):
         employee_name = self.entry_employee_name.get()
@@ -114,6 +123,28 @@ class EmployeeVacationApp:
         vacation_records = self.cur.fetchall()
         for record in vacation_records:
             self.listbox_vacation_records.insert(tk.END, f"{record[0]} - {record[1]}")
+
+    def export_employees(self):
+        with open("employees.csv", "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Employee ID", "Name"])
+            self.cur.execute("SELECT * FROM employees")
+            employees = self.cur.fetchall()
+            for employee in employees:
+                writer.writerow(employee)
+
+        messagebox.showinfo("Export Successful", "Employees exported to employees.csv")
+
+    def export_vacations(self):
+        with open("vacations.csv", "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Employee ID", "Employee Name", "Vacation Date"])
+            self.cur.execute("SELECT e.id, e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
+            vacation_records = self.cur.fetchall()
+            for record in vacation_records:
+                writer.writerow(record)
+
+        messagebox.showinfo("Export Successful", "Vacations exported to vacations.csv")
 
 def main():
     root = tk.Tk()
