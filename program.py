@@ -25,6 +25,7 @@ class EmployeeVacationApp:
                                 id INTEGER PRIMARY KEY,
                                 employee_id INTEGER,
                                 date TEXT,
+                                UNIQUE(employee_id, date),
                                 FOREIGN KEY(employee_id) REFERENCES employees(id)
                             )''')
         self.conn.commit()
@@ -101,14 +102,21 @@ class EmployeeVacationApp:
             selected_employee_id = self.listbox_employees.get(selected_employee)[0]
             vacation_date = self.entry_vacation_date.get()
             if vacation_date:
-                self.cur.execute("INSERT INTO vacations (employee_id, date) VALUES (?, ?)", (selected_employee_id, vacation_date))
-                self.conn.commit()
-                self.populate_vacation_records_listbox()
-                self.entry_vacation_date.delete(0, tk.END)
+                if not self.check_duplicate_vacation(selected_employee_id, vacation_date):
+                    self.cur.execute("INSERT INTO vacations (employee_id, date) VALUES (?, ?)", (selected_employee_id, vacation_date))
+                    self.conn.commit()
+                    self.populate_vacation_records_listbox()
+                    self.entry_vacation_date.delete(0, tk.END)
+                else:
+                    messagebox.showerror("Error", "Vacation for this employee on this date already exists.")
             else:
                 messagebox.showerror("Error", "Please enter vacation date.")
         else:
             messagebox.showerror("Error", "Please select an employee.")
+
+    def check_duplicate_vacation(self, employee_id, vacation_date):
+        self.cur.execute("SELECT * FROM vacations WHERE employee_id=? AND date=?", (employee_id, vacation_date))
+        return self.cur.fetchone() is not None
 
     def populate_employees_listbox(self):
         self.listbox_employees.delete(0, tk.END)
@@ -138,8 +146,8 @@ class EmployeeVacationApp:
     def export_vacations(self):
         with open("vacations.csv", "w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["Employee ID", "Employee Name", "Vacation Date"])
-            self.cur.execute("SELECT e.id, e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
+            writer.writerow(["Employee Name", "Vacation Date"])
+            self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
             vacation_records = self.cur.fetchall()
             for record in vacation_records:
                 writer.writerow(record)
