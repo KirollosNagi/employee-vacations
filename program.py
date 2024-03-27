@@ -59,6 +59,10 @@ class EmployeeVacationApp:
         self.button_record_vacation = tk.Button(self.master, text="Record Vacation", command=self.record_vacation)
         self.button_record_vacation.pack()
 
+        # Button to remove vacation
+        self.button_remove_vacation = tk.Button(self.master, text="Remove Vacation", command=self.remove_vacation)
+        self.button_remove_vacation.pack()
+
         # Listbox to display vacation records
         self.listbox_vacation_records = tk.Listbox(self.master)
         self.listbox_vacation_records.pack()
@@ -113,6 +117,19 @@ class EmployeeVacationApp:
                 messagebox.showerror("Error", "Please enter vacation date.")
         else:
             messagebox.showerror("Error", "Please select an employee.")
+
+    def remove_vacation(self):
+        selected_vacation = self.listbox_vacation_records.curselection()
+        if selected_vacation:
+            vacation_info = self.listbox_vacation_records.get(selected_vacation)
+            employee_name, vacation_date = vacation_info.split(" - ")
+            self.cur.execute("SELECT id FROM employees WHERE name=?", (employee_name,))
+            employee_id = self.cur.fetchone()[0]
+            self.cur.execute("DELETE FROM vacations WHERE employee_id=? AND date=?", (employee_id, vacation_date))
+            self.conn.commit()
+            self.populate_vacation_records_listbox()
+        else:
+            messagebox.showerror("Error", "Please select a vacation record to remove.")
 
     def check_duplicate_vacation(self, employee_id, vacation_date):
         self.cur.execute("SELECT * FROM vacations WHERE employee_id=? AND date=?", (employee_id, vacation_date))
