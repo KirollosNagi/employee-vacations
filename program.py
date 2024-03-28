@@ -4,12 +4,13 @@ import csv
 from tkinter import messagebox
 from tkinter import filedialog
 from datetime import datetime, timedelta
+import os
 
 class EmployeeVacationApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Employee Vacation Tracker")
-        self.master.geometry("500x650")
+        self.master.geometry("500x700")
 
         # Initialize database
         self.conn = sqlite3.connect("employee_vacations.db")
@@ -99,6 +100,9 @@ class EmployeeVacationApp:
 
         self.button_export_vacations = tk.Button(self.master, text="Export Vacations", command=self.export_vacations)
         self.button_export_vacations.grid(row=10, column=1, columnspan=1, padx=10, pady=5)
+
+        self.button_export_vacations = tk.Button(self.master, text="Export All Employees sheets", command=self.export_employees_all)
+        self.button_export_vacations.grid(row=11, column=0, columnspan=2, padx=10, pady=5)
 
         self.listbox_employees.bind("<<ListboxSelect>>", self.populate_vacation_records_listbox)
 
@@ -344,16 +348,43 @@ class EmployeeVacationApp:
 
         messagebox.showinfo("Export Successful", f"Employees exported to {file_name}")
 
-    def export_vacations(self):
-        with open("vacations.csv", "w", newline="") as file:
+    def export_employees_all(self):
+            folder_name = rf"output/{datetime.now().date().strftime('%Y-%m-%d')}/"
+            os.makedirs(folder_name, exist_ok=True)
+            # get all employee ids
+            self.cur.execute("SELECT * FROM employees")
+            employees = self.cur.fetchall()
+            for employee in employees:
+                emp_id, name, start_date = employee
+                self.export_vacations(name=f'{folder_name}{name}',id=emp_id,silent=True)
+            messagebox.showinfo("Export Successful", f"Employees exported to {folder_name}")
+
+
+    def export_vacations(self, name="vacations",id=None,silent=False):
+        with open(f'{name}.csv', "w", newline="") as file:
             writer = csv.writer(file)
+            if id:
+                # write in the write the balance for this employee
+                self.cur.execute("SELECT name, start_date FROM employees WHERE id=?", (id,))
+                employee_info = self.cur.fetchone()
+                if employee_info:
+                    employee_name, start_date_str = employee_info
+                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                    balance = self.calculate_pto_balance(id, start_date, datetime.now().date())
+                    writer.writerow(["Name", "Start Date", "balance"])
+                    writer.writerow([employee_name, start_date_str, balance])
+                    writer.writerow([''])
+                
+                self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id WHERE e.id=?", (id,))
+            else:
+                self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
             writer.writerow(["Employee Name", "Vacation Date"])
-            self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id")
             vacation_records = self.cur.fetchall()
             for record in vacation_records:
                 writer.writerow(record)
-
-        messagebox.showinfo("Export Successful", "Vacations exported to vacations.csv")
+        
+        if not silent:
+            messagebox.showinfo("Export Successful", f"Vacations exported to {name}.csv")
 
 def main():
     root = tk.Tk()
