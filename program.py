@@ -266,6 +266,7 @@ class EmployeeVacationApp:
                     if len(row) == 2:
                         employee_name, start_date_str = row
                         try:
+                            employee_name = employee_name.strip()
                             # Parsing date to ensure consistent format
                             start_date = self.parse_date(start_date_str)
                             employee_id = self.get_employee_id(employee_name)
@@ -292,6 +293,7 @@ class EmployeeVacationApp:
                         employee_name, vacation_date = row
                         try:
                             # Parsing date to ensure consistent format
+                            employee_name = employee_name.strip()
                             vacation_date = self.parse_date(vacation_date)
                             employee_id = self.get_employee_id(employee_name)
                             if not employee_id:
@@ -324,7 +326,6 @@ class EmployeeVacationApp:
         raise ValueError(f"Date string: '{date_str}' does not match any known format")
 
     def get_employee_id(self, employee_name):
-        employee_name = employee_name.strip()
         self.cur.execute("SELECT id FROM employees WHERE name=?", (employee_name,))
         result = self.cur.fetchone()
         if result:
