@@ -1,3 +1,7 @@
 *.csv
 venv/
 *.exe
+other/
+build/
+dist/
+*.spec
