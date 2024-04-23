@@ -122,7 +122,7 @@ class EmployeeVacationApp:
         start_date_plus_one_year = datetime(six_months_after_start.year + 1, 1, 1).date()
         
         if reference_date <= six_months_after_start:
-            return 6 - self.get_vacations_taken(emp_id, start_date, reference_date)
+            return 7 - self.get_vacations_taken(emp_id, start_date, reference_date)
         elif reference_date <= start_date_plus_one_year:
             remaining_days = (start_date_plus_one_year - six_months_after_start).days  # Approximate remaining months
             yearly_pto = round(remaining_days / 365 * 21)  # 21 days PTO per year
@@ -136,27 +136,27 @@ class EmployeeVacationApp:
         i = first_full_year.year
         while i < reference_date.year:
             start_date = datetime(i, 1, 1).date()
-            end_date = datetime(i, 3, 1).date()
+            end_date = datetime(i, 3, 31).date()
             balance += old_balance + 21 - self.get_vacations_taken(emp_id, start_date, end_date)
             balance = min(balance, 21) # PTO cap
-            start_date = datetime(i, 3, 2).date()
+            start_date = datetime(i, 4, 1).date()
             end_date = datetime(i, 12, 31).date()
             balance -= self.get_vacations_taken(emp_id, start_date, end_date)
             old_balance = balance
             balance = 0
             i += 1
 
-        if reference_date < datetime(i, 3, 1).date():
+        if reference_date < datetime(i, 3, 31).date():
             start_date = datetime(i, 1, 1).date()
             end_date = reference_date
             balance += old_balance + 21 - self.get_vacations_taken(emp_id, start_date, end_date)
             return balance
         else:
             start_date = datetime(i, 1, 1).date()
-            end_date = datetime(i, 3, 1).date()
+            end_date = datetime(i, 3, 31).date()
             balance += old_balance + 21 - self.get_vacations_taken(emp_id, start_date, end_date)
             balance = min(balance, 21) # PTO cap
-            start_date = datetime(i, 3, 2).date()
+            start_date = datetime(i, 4, 1).date()
             end_date = reference_date
             balance -= self.get_vacations_taken(emp_id, start_date, end_date)
             return balance
