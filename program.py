@@ -6,11 +6,14 @@ from tkinter import filedialog
 from datetime import datetime, timedelta
 import os
 
+PTO_CAP = 21
+PTO_CAP_SENIOR = 30
+
 class EmployeeVacationApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Employee Vacation Tracker")
-        self.master.geometry("500x700")
+        self.master.geometry("600x700")
 
         # Initialize database
         self.conn = sqlite3.connect("employee_vacations.db")
@@ -23,7 +26,8 @@ class EmployeeVacationApp:
         self.cur.execute('''CREATE TABLE IF NOT EXISTS employees (
                                 id INTEGER PRIMARY KEY,
                                 name TEXT,
-                                start_date DATE
+                                start_date DATE,
+                                senior_employee BOOLEAN
                             )''')
         self.cur.execute('''CREATE TABLE IF NOT EXISTS vacations (
                                 id INTEGER PRIMARY KEY,
@@ -46,6 +50,12 @@ class EmployeeVacationApp:
         self.label_start_date.grid(row=1, column=0, padx=10, pady=5)
         self.entry_start_date = tk.Entry(self.master)
         self.entry_start_date.grid(row=1, column=1, padx=10, pady=5)
+
+        # check box for senior employee
+        self.senior_employee = tk.IntVar()
+        self.check_senior_employee = tk.Checkbutton(self.master, text="Senior Employee", variable=self.senior_employee)
+        self.check_senior_employee.grid(row=1, column=2, padx=10, pady=5)
+
 
         # Button to add employee
         self.button_add_employee = tk.Button(self.master, text="Add Employee", command=self.add_employee)
@@ -117,28 +127,29 @@ class EmployeeVacationApp:
         vacations_taken = self.cur.fetchone()[0]
         return vacations_taken
 
-    def calculate_pto_balance(self, emp_id, start_date, reference_date):
+    def calculate_pto_balance(self, emp_id, start_date, reference_date, is_senior=False):
         six_months_after_start = start_date + timedelta(days=180)
         start_date_plus_one_year = datetime(six_months_after_start.year + 1, 1, 1).date()
-        
+        pto_cap = PTO_CAP_SENIOR if is_senior else PTO_CAP
+
         if reference_date <= six_months_after_start:
             return 7 - self.get_vacations_taken(emp_id, start_date, reference_date)
         elif reference_date <= start_date_plus_one_year:
             remaining_days = (start_date_plus_one_year - six_months_after_start).days  # Approximate remaining months
-            yearly_pto = round(remaining_days / 365 * 21)  # 21 days PTO per year
+            yearly_pto = round(remaining_days / 365 * pto_cap)  # 21 or 30 days PTO per year
             return yearly_pto - self.get_vacations_taken(emp_id, six_months_after_start, reference_date)
         else:
-            old_balance = self.calculate_pto_balance(emp_id, start_date, start_date_plus_one_year)
-            return self.calculate_pto_balance_helper(emp_id, start_date_plus_one_year, reference_date, old_balance)
+            old_balance = self.calculate_pto_balance(emp_id, start_date, start_date_plus_one_year, is_senior)
+            return self.calculate_pto_balance_helper(emp_id, start_date_plus_one_year, reference_date, old_balance, pto_cap)
     
-    def calculate_pto_balance_helper(self, emp_id, first_full_year, reference_date, old_balance=0):
+    def calculate_pto_balance_helper(self, emp_id, first_full_year, reference_date, old_balance=0, pto_cap=PTO_CAP):
         balance = 0
         i = first_full_year.year
         while i < reference_date.year:
             start_date = datetime(i, 1, 1).date()
             end_date = datetime(i, 3, 31).date()
-            balance += old_balance + 21 - self.get_vacations_taken(emp_id, start_date, end_date)
-            balance = min(balance, 21) # PTO cap
+            balance += max(0, old_balance) + pto_cap - self.get_vacations_taken(emp_id, start_date, end_date)
+            balance = min(balance, pto_cap) # PTO cap
             start_date = datetime(i, 4, 1).date()
             end_date = datetime(i, 12, 31).date()
             balance -= self.get_vacations_taken(emp_id, start_date, end_date)
@@ -149,13 +160,13 @@ class EmployeeVacationApp:
         if reference_date < datetime(i, 3, 31).date():
             start_date = datetime(i, 1, 1).date()
             end_date = reference_date
-            balance += old_balance + 21 - self.get_vacations_taken(emp_id, start_date, end_date)
+            balance += max(0, old_balance) + pto_cap - self.get_vacations_taken(emp_id, start_date, end_date)
             return balance
         else:
             start_date = datetime(i, 1, 1).date()
             end_date = datetime(i, 3, 31).date()
-            balance += old_balance + 21 - self.get_vacations_taken(emp_id, start_date, end_date)
-            balance = min(balance, 21) # PTO cap
+            balance += max(0, old_balance) + pto_cap - self.get_vacations_taken(emp_id, start_date, end_date)
+            balance = min(balance, pto_cap) # PTO cap
             start_date = datetime(i, 4, 1).date()
             end_date = reference_date
             balance -= self.get_vacations_taken(emp_id, start_date, end_date)
@@ -164,10 +175,11 @@ class EmployeeVacationApp:
     def add_employee(self):
         employee_name = self.entry_employee_name.get()
         start_date = self.entry_start_date.get()
+        senior_employee = self.senior_employee.get()
         if employee_name:
             try:
                 start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-                self.cur.execute("INSERT INTO employees (name, start_date) VALUES (?, ?)", (employee_name, start_date_obj))
+                self.cur.execute("INSERT INTO employees (name, start_date, senior_employee) VALUES (?, ?, ?)", (employee_name, start_date_obj, senior_employee))
                 self.conn.commit()
                 self.populate_employees_listbox()
                 self.entry_employee_name.delete(0, tk.END)
@@ -236,13 +248,13 @@ class EmployeeVacationApp:
         selected_index = self.listbox_employees.curselection()
         if selected_index:
             selected_employee_id = self.listbox_employees.get(selected_index)[0]
-            self.cur.execute("SELECT name, start_date FROM employees WHERE id=?", (selected_employee_id,))
+            self.cur.execute("SELECT name, start_date, senior_employee FROM employees WHERE id=?", (selected_employee_id,))
             employee_info = self.cur.fetchone()
             if employee_info:
-                employee_name, start_date_str = employee_info
+                employee_name, start_date_str, is_senior = employee_info
                 start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                balance = self.calculate_pto_balance(selected_employee_id, start_date, datetime.now().date())
-                self.label_balance.config(text=f"PTO Balance for {employee_name}: {balance} days")
+                balance = self.calculate_pto_balance(selected_employee_id, start_date, datetime.now().date(), is_senior)
+                self.label_balance.config(text=f"{'(senior)' if is_senior else ''} PTO Balance for {employee_name}: {balance} days")
                 self.label_actual_start_date.config(text=f"Start Date for {employee_name}: {start_date_str}")
                 self.cur.execute("SELECT e.name, v.date FROM vacations v JOIN employees e ON v.employee_id = e.id WHERE e.id=?", (selected_employee_id,))
             else:
@@ -342,9 +354,9 @@ class EmployeeVacationApp:
             self.cur.execute("SELECT * FROM employees")
             employees = self.cur.fetchall()
             for employee in employees:
-                emp_id, name, start_date = employee
+                emp_id, name, start_date, is_senior = employee
                 start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-                balance = self.calculate_pto_balance(emp_id, start_date, datetime.now().date())
+                balance = self.calculate_pto_balance(emp_id, start_date, datetime.now().date(), is_senior)
                 writer.writerow([name, start_date, balance])
 
         messagebox.showinfo("Export Successful", f"Employees exported to {file_name}")
@@ -356,22 +368,22 @@ class EmployeeVacationApp:
             self.cur.execute("SELECT * FROM employees")
             employees = self.cur.fetchall()
             for employee in employees:
-                emp_id, name, start_date = employee
+                emp_id, name, start_date, is_senior = employee
                 self.export_vacations(name=f'{folder_name}{name}',id=emp_id,silent=True)
             messagebox.showinfo("Export Successful", f"Employees exported to {folder_name}")
 
 
-    def export_vacations(self, name="vacations",id=None,silent=False):
+    def export_vacations(self, name="vacations",id=None, silent=False):
         with open(f'{name}.csv', "w", newline="") as file:
             writer = csv.writer(file)
             if id:
                 # write in the write the balance for this employee
-                self.cur.execute("SELECT name, start_date FROM employees WHERE id=?", (id,))
+                self.cur.execute("SELECT name, start_date, senior_employee FROM employees WHERE id=?", (id,))
                 employee_info = self.cur.fetchone()
                 if employee_info:
-                    employee_name, start_date_str = employee_info
+                    employee_name, start_date_str, is_senior = employee_info
                     start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                    balance = self.calculate_pto_balance(id, start_date, datetime.now().date())
+                    balance = self.calculate_pto_balance(id, start_date, datetime.now().date(), is_senior)
                     writer.writerow(["Name", "Start Date", "balance"])
                     writer.writerow([employee_name, start_date_str, balance])
                     writer.writerow([''])
