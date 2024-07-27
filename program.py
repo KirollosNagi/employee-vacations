@@ -27,7 +27,7 @@ class EmployeeVacationApp:
                                 id INTEGER PRIMARY KEY,
                                 name TEXT,
                                 start_date DATE,
-                                senior_employee BOOLEAN
+                                senior_employee BOOLEAN default 0
                             )''')
         self.cur.execute('''CREATE TABLE IF NOT EXISTS vacations (
                                 id INTEGER PRIMARY KEY,
