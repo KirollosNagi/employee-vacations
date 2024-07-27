@@ -5,3 +5,4 @@ other/
 build/
 dist/
 *.spec
+*.db
